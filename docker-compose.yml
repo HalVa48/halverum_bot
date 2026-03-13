@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   vpn_bot:
@@ -9,12 +9,15 @@ services:
       - .env
     volumes:
       - bot_data:/app/data
+      - bot_backups:/app/backups
     networks:
       - vpn_network
 
 volumes:
   bot_data:
     name: vpn_bot_data
+  bot_backups:
+    name: vpn_bot_backups
 
 networks:
   vpn_network:
