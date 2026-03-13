@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  vpn_bot:
+    build: .
+    container_name: vpn_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - bot_data:/app/data
+    networks:
+      - vpn_network
+
+volumes:
+  bot_data:
+    name: vpn_bot_data
+
+networks:
+  vpn_network:
+    name: vpn_network
+    driver: bridge
