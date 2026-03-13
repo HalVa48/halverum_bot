@@ -1,3 +1,1 @@
-"""
-Модуль для работы с базой данных
-"""
+from .models import Base, User, UserConfig

@@ -1,3 +1,1 @@
-"""
-Модуль для работы с Telegram-ботом
-"""
+from .config import config
