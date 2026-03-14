@@ -4,10 +4,12 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
+from aiohttp import ClientTimeout
 from sqlalchemy import select
 
 from api.vpn_client import vpn_client
@@ -238,8 +240,14 @@ async def main():
 
     # Настраиваем сессию с увеличенным таймаутом и прокси
     timeout = ClientTimeout(total=120, connect=30, sock_read=60)
+
+    # Используем SOCKS5 прокси с hostname resolution
+    connector = ProxyConnector.from_url(
+        "socks5://5.180.97.31:1080",
+        ssl=False,
+    )
     session = AiohttpSession(
-        proxy=config.BOT_PROXY if config.BOT_PROXY else None,
+        connector=connector,
         timeout=timeout,
     )
     bot = Bot(token=config.BOT_TOKEN, session=session)
