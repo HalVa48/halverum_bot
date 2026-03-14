@@ -3,6 +3,7 @@ import datetime
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -50,26 +51,36 @@ async def _edit_last_message(
         except Exception:
             pass
 
-    await message.answer(text, parse_mode="HTML", reply_markup=reply_markup)
+    try:
+        await message.answer(text, parse_mode="HTML", reply_markup=reply_markup)
+    except TelegramNetworkError:
+        # Игнорируем ошибки сети — Telegram доставит сообщение позже
+        pass
 
 
 async def start_handler(message: Message, state: FSMContext, db_user: User | None):
     """Handle /start command"""
     if db_user and db_user.is_blocked:
-        await message.answer(
-            "🚫 <b>Доступ заблокирован.</b>",
-            parse_mode="HTML",
-        )
+        try:
+            await message.answer(
+                "🚫 <b>Доступ заблокирован.</b>",
+                parse_mode="HTML",
+            )
+        except TelegramNetworkError:
+            pass
         return
 
     if db_user and db_user.is_authorized:
         from bot.keyboards import get_main_menu_keyboard
 
-        await message.answer(
-            "🏠 <b>Главное меню</b>",
-            parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(),
-        )
+        try:
+            await message.answer(
+                "🏠 <b>Главное меню</b>",
+                parse_mode="HTML",
+                reply_markup=get_main_menu_keyboard(),
+            )
+        except TelegramNetworkError:
+            pass
         return
 
     # Проверяем временную блокировку
@@ -79,18 +90,25 @@ async def start_handler(message: Message, state: FSMContext, db_user: User | Non
             remaining = db_user.locked_until - now
             hours = int(remaining.total_seconds() // 3600)
             minutes = int((remaining.total_seconds() % 3600) // 60)
-            await message.answer(
-                f"⏳ <b>Слишком много неверных попыток.</b>\n\n"
-                f"Попробуйте через {hours}ч {minutes}мин.",
-                parse_mode="HTML",
-            )
+            try:
+                await message.answer(
+                    f"⏳ <b>Слишком много неверных попыток.</b>\n\n"
+                    f"Попробуйте через {hours}ч {minutes}мин.",
+                    parse_mode="HTML",
+                )
+            except TelegramNetworkError:
+                pass
             return
 
-    msg = await message.answer(
-        "🔒 <b>VPN Service</b>\n\nДля доступа к сервису введите пароль:",
-        parse_mode="HTML",
-        reply_markup=get_cancel_keyboard(),
-    )
+    try:
+        msg = await message.answer(
+            "🔒 <b>VPN Service</b>\n\nДля доступа к сервису введите пароль:",
+            parse_mode="HTML",
+            reply_markup=get_cancel_keyboard(),
+        )
+    except TelegramNetworkError:
+        # Не переходим в состояние ожидания, если не смогли отправить сообщение
+        return
 
     await state.update_data(last_message_id=msg.message_id)
     await state.set_state(StartState.waiting_password)
@@ -218,7 +236,13 @@ async def main():
     # Запускаем планировщик бэкапов
     await scheduler.start_scheduler()
 
-    bot = Bot(token=config.BOT_TOKEN)
+    # Настраиваем сессию с увеличенным таймаутом и прокси
+    timeout = ClientTimeout(total=120, connect=30, sock_read=60)
+    session = AiohttpSession(
+        proxy=config.BOT_PROXY if config.BOT_PROXY else None,
+        timeout=timeout,
+    )
+    bot = Bot(token=config.BOT_TOKEN, session=session)
     dp = Dispatcher()
 
     dp.workflow_data["session_pool"] = async_session_maker

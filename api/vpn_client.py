@@ -19,6 +19,8 @@ class VPNClient:
         self.password = config.VPN_API_PASSWORD
         self._token: str | None = None
         self._client: httpx.AsyncClient | None = None
+        self._use_cookies: bool = False
+        self._cookies: dict | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -30,18 +32,77 @@ class VPNClient:
             return self._token
 
         client = await self._get_client()
+
+        # Пробуем разные варианты аутентификации
+        # Вариант 1: JSON с явным Content-Type
         response = await client.post(
             f"{self.base_url}/api/auth/token",
-            data={"email": self.email, "password": self.password},
+            json={"email": self.email, "password": self.password},
+            headers={"Content-Type": "application/json"},
         )
+
+        # Если получили 200 с пустым ответом, пробуем form data
+        if response.status_code == 200 and not response.content:
+            response = await client.post(
+                f"{self.base_url}/api/auth/token",
+                data={"email": self.email, "password": self.password},
+            )
+
+        # Если 404 или 405, пробуем альтернативный endpoint /auth/login
+        if response.status_code in (404, 405):
+            response = await client.post(
+                f"{self.base_url}/auth/login",
+                json={"email": self.email, "password": self.password},
+            )
+
+        # Для Amnezia VPN пробуем /api/auth/login с form data
+        if response.status_code in (404, 405) or (
+            response.status_code == 200 and not response.content
+        ):
+            response = await client.post(
+                f"{self.base_url}/api/auth/login",
+                data={"email": self.email, "password": self.password},
+            )
 
         if response.status_code != 200:
             raise VPNAPIError(
-                "Failed to authenticate with VPN API", response.status_code
+                f"Failed to authenticate with VPN API (status {response.status_code}): {response.text[:200]}",
+                response.status_code,
             )
 
-        data = response.json()
-        self._token = data.get("access_token") or data.get("token")
+        # Проверяем, что ответ не пустой
+        if not response.content:
+            raise VPNAPIError("VPN API returned empty response during authentication")
+
+        try:
+            data = response.json()
+        except ValueError as e:
+            raise VPNAPIError(
+                f"VPN API returned invalid JSON: {response.text[:100]}"
+            ) from e
+
+        # Amnezia может возвращать токен в разных полях
+        self._token = (
+            data.get("access_token")
+            or data.get("token")
+            or data.get("auth_token")
+            or data.get("api_key")
+        )
+
+        # Если токен не найден, но есть cookie - используем cookie аутентификацию
+        if not self._token:
+            cookies = response.cookies
+            auth_cookie = (
+                cookies.get("access_token")
+                or cookies.get("token")
+                or cookies.get("session")
+            )
+            if auth_cookie:
+                self._cookies = {"access_token": auth_cookie}
+                self._use_cookies = True
+                return auth_cookie
+            raise VPNAPIError("VPN API response does not contain access token")
+
         return self._token
 
     async def _request(
@@ -55,32 +116,71 @@ class VPNClient:
         client = await self._get_client()
         token = await self._ensure_token()
 
-        headers = {"Authorization": f"Bearer {token}"}
+        # Используем cookie или Bearer токен в зависимости от типа аутентификации
+        if self._use_cookies and self._cookies:
+            headers = {}
+            cookies = self._cookies
+        else:
+            headers = {"Authorization": f"Bearer {token}"}
+            cookies = None
+
         url = f"{self.base_url}{endpoint}"
 
         response = await client.request(
-            method, url, headers=headers, params=params, json=json_data, files=files
+            method,
+            url,
+            headers=headers,
+            params=params,
+            json=json_data,
+            files=files,
+            cookies=cookies,
         )
 
         if response.status_code == 401:
             self._token = None
+            self._cookies = None
+            self._use_cookies = False
             token = await self._ensure_token()
-            headers["Authorization"] = f"Bearer {token}"
+
+            if self._use_cookies and self._cookies:
+                headers = {}
+                cookies = self._cookies
+            else:
+                headers = {"Authorization": f"Bearer {token}"}
+                cookies = None
+
             response = await client.request(
-                method, url, headers=headers, params=params, json=json_data, files=files
+                method,
+                url,
+                headers=headers,
+                params=params,
+                json=json_data,
+                files=files,
+                cookies=cookies,
             )
 
         if response.status_code not in (200, 201):
-            try:
-                error_data = response.json()
-                message = error_data.get(
-                    "detail", error_data.get("message", "Unknown error")
-                )
-            except Exception:
-                message = response.text or "Unknown error"
+            if not response.content:
+                message = f"API returned empty response (status {response.status_code})"
+            else:
+                try:
+                    error_data = response.json()
+                    message = error_data.get(
+                        "detail", error_data.get("message", "Unknown error")
+                    )
+                except Exception:
+                    message = response.text[:200] or "Unknown error"
             raise VPNAPIError(message, response.status_code)
 
-        return response.json()
+        if not response.content:
+            return {}
+
+        try:
+            return response.json()
+        except ValueError as e:
+            raise VPNAPIError(
+                f"API returned invalid JSON: {response.text[:100]}"
+            ) from e
 
     async def get_servers(self) -> list[dict]:
         """Get list of all servers"""

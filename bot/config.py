@@ -28,6 +28,8 @@ class Config:
 
     ADMIN_IDS: list[int] = field(default_factory=_parse_admin_ids)
 
+    BOT_PROXY: str = os.getenv("BOT_PROXY", "")
+
     def is_admin(self, telegram_id: int) -> bool:
         return telegram_id in self.ADMIN_IDS
 

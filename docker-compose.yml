@@ -12,6 +12,7 @@ services:
       - bot_backups:/app/backups
     networks:
       - vpn_network
+      - halverum-bot
 
 volumes:
   bot_data:
@@ -20,6 +21,8 @@ volumes:
     name: vpn_bot_backups
 
 networks:
+  halverum-bot:
+    external: true
   vpn_network:
     name: vpn_network
     driver: bridge
