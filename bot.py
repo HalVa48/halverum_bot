@@ -9,7 +9,7 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
-from aiohttp import ClientSession, ClientTimeout, TCPConnector
+from aiohttp import ClientTimeout, TCPConnector
 from aiohttp_socks import ProxyConnector
 from sqlalchemy import select
 
@@ -252,9 +252,10 @@ async def main():
     else:
         connector = TCPConnector(ssl=False, enable_cleanup_closed=True)
 
-    # Создаем aiohttp ClientSession с коннектором
-    aiohttp_session = ClientSession(connector=connector, timeout=timeout)
-    session = AiohttpSession(session=aiohttp_session)
+    session = AiohttpSession(
+        connector=connector,
+        timeout=timeout,
+    )
     bot = Bot(token=config.BOT_TOKEN, session=session)
     dp = Dispatcher()
 
@@ -279,7 +280,6 @@ async def main():
     finally:
         await vpn_client.close()
         await bot.session.close()
-        await aiohttp_session.close()
 
 
 if __name__ == "__main__":
