@@ -33,32 +33,21 @@ class VPNClient:
 
         client = await self._get_client()
 
-        # Пробуем разные варианты аутентификации
-        # Вариант 1: JSON с явным Content-Type
+        # Amnezia VPN API ожидает form data (application/x-www-form-urlencoded)
         response = await client.post(
             f"{self.base_url}/api/auth/token",
-            json={"email": self.email, "password": self.password},
-            headers={"Content-Type": "application/json"},
+            data={"email": self.email, "password": self.password},
         )
 
-        # Если получили 200 с пустым ответом, пробуем form data
-        if response.status_code == 200 and not response.content:
-            response = await client.post(
-                f"{self.base_url}/api/auth/token",
-                data={"email": self.email, "password": self.password},
-            )
-
-        # Если 404 или 405, пробуем альтернативный endpoint /auth/login
+        # Если получили 404 или 405, пробуем альтернативный endpoint /auth/login
         if response.status_code in (404, 405):
             response = await client.post(
                 f"{self.base_url}/auth/login",
-                json={"email": self.email, "password": self.password},
+                data={"email": self.email, "password": self.password},
             )
 
-        # Для Amnezia VPN пробуем /api/auth/login с form data
-        if response.status_code in (404, 405) or (
-            response.status_code == 200 and not response.content
-        ):
+        # Пробуем /api/auth/login с form data
+        if response.status_code in (404, 405):
             response = await client.post(
                 f"{self.base_url}/api/auth/login",
                 data={"email": self.email, "password": self.password},
