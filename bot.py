@@ -244,14 +244,17 @@ async def main():
 
     # Используем прокси если он указан в конфиге
     if config.BOT_PROXY:
-        connector = ProxyConnector.from_url(config.BOT_PROXY)
+        # Конвертируем socks5h:// в socks5:// для совместимости с aiohttp_socks
+        proxy_url = config.BOT_PROXY.replace("socks5h://", "socks5://").replace(
+            "socks4a://", "socks4://"
+        )
+        connector = ProxyConnector.from_url(proxy_url)
     else:
         connector = TCPConnector(ssl=False, enable_cleanup_closed=True)
 
-    session = AiohttpSession(
-        connector=connector,
-        timeout=timeout,
-    )
+    # Создаем aiohttp ClientSession с коннектором
+    aiohttp_session = ClientSession(connector=connector, timeout=timeout)
+    session = AiohttpSession(session=aiohttp_session)
     bot = Bot(token=config.BOT_TOKEN, session=session)
     dp = Dispatcher()
 
@@ -276,6 +279,7 @@ async def main():
     finally:
         await vpn_client.close()
         await bot.session.close()
+        await aiohttp_session.close()
 
 
 if __name__ == "__main__":
