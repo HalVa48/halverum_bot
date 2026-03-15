@@ -17,8 +17,8 @@ def _parse_admin_ids() -> list[int]:
 class Config:
     BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
     VPN_API_URL: str = os.getenv("VPN_API_URL", "http://localhost:8082")
-    VPN_API_EMAIL: str = os.getenv("VPN_API_EMAIL", "admin@amnez.ia")
-    VPN_API_PASSWORD: str = os.getenv("VPN_API_PASSWORD", "admin123")
+    VPN_API_EMAIL: str = os.getenv("VPN_API_EMAIL", "")
+    VPN_API_PASSWORD: str = os.getenv("VPN_API_PASSWORD", "")
 
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///vpn_bot.db")
 
