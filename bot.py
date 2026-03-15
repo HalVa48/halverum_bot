@@ -9,8 +9,7 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
-from aiohttp import ClientTimeout, TCPConnector
-from aiohttp_socks import ProxyConnector
+from aiohttp import ClientTimeout
 from sqlalchemy import select
 
 from api.vpn_client import vpn_client
@@ -242,22 +241,7 @@ async def main():
     # Настраиваем сессию с увеличенным таймаутом
     timeout = ClientTimeout(total=180, connect=60, sock_read=90)
 
-    # Используем прокси если он указан в конфиге
-    if config.BOT_PROXY:
-        # Конвертируем socks5h:// в socks5:// для совместимости с aiohttp_socks
-        proxy_url = config.BOT_PROXY.replace("socks5h://", "socks5://").replace(
-            "socks4a://", "socks4://"
-        )
-        connector = ProxyConnector.from_url(proxy_url)
-    else:
-        connector = TCPConnector(ssl=False, enable_cleanup_closed=True)
-
-    session = AiohttpSession(
-        backend_kwargs={
-            "connector": connector,
-            "timeout": timeout,
-        },
-    )
+    session = AiohttpSession(proxy=config.BOT_PROXY)
     bot = Bot(token=config.BOT_TOKEN, session=session)
     dp = Dispatcher()
 
