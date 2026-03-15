@@ -253,8 +253,10 @@ async def main():
         connector = TCPConnector(ssl=False, enable_cleanup_closed=True)
 
     session = AiohttpSession(
-        connector=connector,
-        timeout=timeout,
+        backend_kwargs={
+            "connector": connector,
+            "timeout": timeout,
+        },
     )
     bot = Bot(token=config.BOT_TOKEN, session=session)
     dp = Dispatcher()
